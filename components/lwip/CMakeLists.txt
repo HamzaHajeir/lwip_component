@@ -1,5 +1,7 @@
 idf_build_get_property(target IDF_TARGET)
 
+set(CONFIG_LWIP_ALTCP_TLS 1)
+
 if(CONFIG_LWIP_ENABLE)
     if(NOT ${target} STREQUAL "linux")
         # ESP platform targets share the same port folder
@@ -102,6 +104,21 @@ if(CONFIG_LWIP_ENABLE)
         "port/sockets_ext.c"
         "port/freertos/sys_arch.c")
 
+if (${CONFIG_LWIP_ALTCP_TLS})
+    list(APPEND srcs 
+    "lwip/src/core/altcp_alloc.c"
+    "lwip/src/core/altcp_tcp.c"
+    "lwip/src/core/altcp.c"
+    "lwip/src/apps/altcp_tls/altcp_tls_mbedtls_mem.c"
+    "lwip/src/apps/altcp_tls/altcp_tls_mbedtls.c")
+    
+    list(APPEND include_dirs lwip/src/apps/altcp_tls)
+    # add_compile_definitions(LWIP_ALTCP=1)
+    # add_compile_definitions(LWIP_ALTCP_TLS=1)
+
+    set(requires mbedtls)
+endif()
+
     if(CONFIG_LWIP_NETIF_API)
         list(APPEND srcs "port/if_index.c")
     endif()
@@ -132,12 +149,7 @@ if(CONFIG_LWIP_ENABLE)
             "lwip/src/netif/ppp/pppos.c"
             "lwip/src/netif/ppp/upap.c"
             "lwip/src/netif/ppp/utils.c"
-            "lwip/src/netif/ppp/vj.c"
-            "lwip/src/netif/ppp/polarssl/arc4.c"
-            "lwip/src/netif/ppp/polarssl/des.c"
-            "lwip/src/netif/ppp/polarssl/md4.c"
-            "lwip/src/netif/ppp/polarssl/md5.c"
-            "lwip/src/netif/ppp/polarssl/sha1.c")
+            "lwip/src/netif/ppp/vj.c")
     endif()
 
     if(NOT ${target} STREQUAL "linux")
@@ -158,6 +170,15 @@ if(CONFIG_LWIP_ENABLE)
             "apps/ping/esp_ping.c"
             "apps/ping/ping.c"
             "apps/ping/ping_sock.c")
+    endif()
+
+    if(NOT CONFIG_LWIP_USE_EXTERNAL_MBEDTLS)
+        list(APPEND srcs
+                "lwip/src/netif/ppp/polarssl/arc4.c"
+                "lwip/src/netif/ppp/polarssl/des.c"
+                "lwip/src/netif/ppp/polarssl/md4.c"
+                "lwip/src/netif/ppp/polarssl/md5.c"
+                "lwip/src/netif/ppp/polarssl/sha1.c")
     endif()
 
     if(CONFIG_LWIP_DHCPS)
@@ -196,6 +217,17 @@ if(CONFIG_LWIP_ENABLE)
         -Wno-type-limits
     )
 
+if (${CONFIG_LWIP_ALTCP_TLS})
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE -DLWIP_ALTCP=1
+        -DLWIP_ALTCP_TLS=1
+        -DLWIP_ALTCP_TLS_MBEDTLS=1
+        -DALTCP_MBEDTLS_DEBUG=128U
+        -DALTCP_MBEDTLS_LIB_DEBUG=128U
+        -DALTCP_MBEDTLS_USE_SESSION_CACHE=1
+        -DALTCP_MBEDTLS_USE_SESSION_TICKETS=1
+        )
+endif()
+
     # ignore some declaration mismatches
     set_source_files_properties(
         lwip/src/netif/ppp/chap_ms.c
@@ -207,12 +239,12 @@ if(CONFIG_LWIP_ENABLE)
         idf_component_optional_requires(PRIVATE openthread)
     endif()
 
-    if(CONFIG_ETH_ENABLED)
-        idf_component_optional_requires(PRIVATE esp_eth)
-    endif()
-
     if(CONFIG_LWIP_DHCP_RESTORE_LAST_IP)
         idf_component_optional_requires(PRIVATE nvs_flash)
+    endif()
+
+    if(CONFIG_LWIP_USE_EXTERNAL_MBEDTLS)
+        idf_component_optional_requires(PRIVATE mbedtls)
     endif()
 
     if(${target} STREQUAL "linux")
